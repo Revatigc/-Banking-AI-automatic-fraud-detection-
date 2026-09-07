@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fraud Model Scorer</title>
+  <style>
+    :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; background: #08111f; color: #edf3ff; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: radial-gradient(circle at top right, #183a67, transparent 38%), #08111f; }
+    main { width: min(920px, calc(100% - 32px)); padding: 42px 0; }
+    .eyebrow { color: #85b7ff; font-size: .76rem; font-weight: 800; letter-spacing: .13em; text-transform: uppercase; }
+    h1 { margin: 8px 0; font-size: clamp(2rem, 5vw, 3.2rem); }
+    .intro { max-width: 650px; color: #aabbd4; line-height: 1.6; }
+    .panel { margin-top: 28px; padding: 26px; border: 1px solid #29476e; border-radius: 18px; background: rgba(14, 29, 50, .9); box-shadow: 0 24px 60px rgba(0, 0, 0, .25); }
+    form { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    label { display: grid; gap: 7px; color: #b9c9df; font-size: .88rem; }
+    input { min-width: 0; padding: 11px 12px; border: 1px solid #3b5e89; border-radius: 9px; background: #091a30; color: #fff; font: inherit; }
+    button { grid-column: 1 / -1; margin-top: 4px; padding: 13px 17px; border: 0; border-radius: 9px; background: #4b91f1; color: #06101f; font: inherit; font-weight: 800; cursor: pointer; }
+    button:hover { background: #72abfa; }
+    #result { display: none; margin-top: 24px; padding: 20px; border-radius: 12px; background: #0a1a2f; border: 1px solid #31557f; }
+    #result.show { display: block; }
+    .metric { font-size: 2.4rem; font-weight: 850; margin: 6px 0; }
+    .flag { font-weight: 800; } .review { color: #ffb4a8; } .clear { color: #7ae0b3; }
+    .note { color: #9db0ca; font-size: .86rem; line-height: 1.5; }
+    @media (max-width: 640px) { form { grid-template-columns: 1fr 1fr; } }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="eyebrow">Saved PyTorch model · local demo</div>
+    <h1>Fraud risk scorer</h1>
+    <p class="intro">Enter a synthetic transaction to score it with the saved model. The response contains the model probability and whether it meets the calibrated review threshold.</p>
+    <section class="panel">
+      <form id="score-form">
+        <label>Amount <input name="amount" type="number" min="0" step="0.01" value="875" required></label>
+        <label>Hour (0–23) <input name="hour" type="number" min="0" max="23" value="2" required></label>
+        <label>Account age (days) <input name="account_age_days" type="number" min="0" value="8" required></label>
+        <label>Transactions in 24h <input name="transactions_24h" type="number" min="0" value="8" required></label>
+        <label>Distance (km) <input name="distance_km" type="number" min="0" step="0.1" value="145" required></label>
+        <label>Card present (0 or 1) <input name="card_present" type="number" min="0" max="1" step="1" value="0" required></label>
+        <button type="submit">Score transaction</button>
+      </form>
+      <div id="result" aria-live="polite"></div>
+    </section>
+  </main>
+  <script>
+    const form = document.querySelector('#score-form');
+    const result = document.querySelector('#result');
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const payload = Object.fromEntries(new FormData(form));
+      for (const key of Object.keys(payload)) payload[key] = Number(payload[key]);
+      result.className = 'show';
+      result.textContent = 'Scoring saved model…';
+      try {
+        const response = await fetch('/score', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || 'Scoring failed');
+        const review = data.review_recommended;
+        result.innerHTML = `<div class="eyebrow">Live model response</div><div class="metric">${(data.fraud_probability * 100).toFixed(2)}%</div><div class="flag ${review ? 'review' : 'clear'}">${review ? 'Review recommended' : 'Auto-clear candidate'}</div><p class="note">Calibrated review threshold: ${(data.threshold * 100).toFixed(2)}%. This is a synthetic-data demonstration, not a production fraud decision.</p>`;
+      } catch (error) {
+        result.textContent = `Could not score transaction: ${error.message}`;
+      }
+    });
+  </script>
+</body>
+</html>
